@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "church-members",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\Users\\student\\AppData\\Local\\Temp\\claude\\C--Users-student-Desktop-etc\\17f37f0b-7a25-43e3-9eb6-323737b5543f\\scratchpad\\serve.ps1"],
+      "port": 8765
+    }
+  ]
+}

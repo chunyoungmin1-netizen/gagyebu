@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>교인명부</title>
+  <style>
+    body {
+      font-family: "Malgun Gothic", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { text-align: center; }
+    .box {
+      background: #fff;
+      padding: 16px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .form-grid label { display: flex; flex-direction: column; font-size: 14px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    input, select, textarea {
+      padding: 6px;
+      font-size: 14px;
+      margin-top: 4px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 14px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #4a6fa5;
+      color: #fff;
+    }
+    button.gray { background: #888; }
+    button.red { background: #c0392b; }
+    .buttons { margin-top: 12px; display: flex; gap: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #eee; }
+    td button { padding: 4px 8px; font-size: 12px; }
+    #search { width: 100%; box-sizing: border-box; }
+    .empty { text-align: center; color: #888; padding: 20px; }
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>교인명부</h1>
+
+  <!-- 입력 폼 -->
+  <div class="box">
+    <h2 id="formTitle">교인 등록</h2>
+    <form id="memberForm">
+      <input type="hidden" id="memberId">
+      <div class="form-grid">
+        <label>이름 *
+          <input type="text" id="name" required>
+        </label>
+        <label>성별
+          <select id="gender">
+            <option value="">선택</option>
+            <option value="남">남</option>
+            <option value="여">여</option>
+          </select>
+        </label>
+        <label>생년월일
+          <input type="date" id="birth">
+        </label>
+        <label>연락처
+          <input type="tel" id="phone" placeholder="010-0000-0000">
+        </label>
+        <label>직분
+          <select id="position">
+            <option value="">선택</option>
+            <option>목사</option>
+            <option>전도사</option>
+            <option>장로</option>
+            <option>권사</option>
+            <option>안수집사</option>
+            <option>집사</option>
+            <option>성도</option>
+          </select>
+        </label>
+        <label>등록일
+          <input type="date" id="regDate">
+        </label>
+        <label class="full">주소
+          <input type="text" id="address">
+        </label>
+        <label class="full">메모
+          <textarea id="memo" rows="2"></textarea>
+        </label>
+      </div>
+      <div class="buttons">
+        <button type="submit" id="submitBtn">등록</button>
+        <button type="button" class="gray" id="cancelBtn" style="display:none">취소</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 백업 -->
+  <div class="box">
+    <h2>백업</h2>
+    <div class="buttons">
+      <button type="button" id="exportBtn">백업 파일 내보내기</button>
+      <button type="button" class="gray" id="importBtn">백업 파일 불러오기</button>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="box">
+    <h2>교인 목록 (<span id="count">0</span>명)</h2>
+    <input type="text" id="search" placeholder="이름, 연락처, 직분으로 검색">
+    <table>
+      <thead>
+        <tr>
+          <th>이름</th>
+          <th>성별</th>
+          <th>생년월일</th>
+          <th>연락처</th>
+          <th>직분</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+      <tbody id="memberList"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // 브라우저 localStorage에 저장할 때 사용할 이름
+    const STORAGE_KEY = "churchMembers";
+
+    // 저장된 교인 목록 불러오기
+    function loadMembers() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    // 교인 목록 저장하기
+    function saveMembers(members) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+    }
+
+    // HTML 특수문자 처리 (입력값이 화면을 깨뜨리지 않도록)
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text || "";
+      return div.innerHTML;
+    }
+
+    // 목록 화면 그리기
+    function renderList() {
+      const members = loadMembers();
+      const keyword = document.getElementById("search").value.trim();
+      const tbody = document.getElementById("memberList");
+
+      const filtered = members.filter(m =>
+        !keyword ||
+        m.name.includes(keyword) ||
+        (m.phone || "").includes(keyword) ||
+        (m.position || "").includes(keyword)
+      );
+
+      document.getElementById("count").textContent = members.length;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">등록된 교인이 없습니다.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(m => `
+        <tr>
+          <td>${escapeHtml(m.name)}</td>
+          <td>${escapeHtml(m.gender)}</td>
+          <td>${escapeHtml(m.birth)}</td>
+          <td>${escapeHtml(m.phone)}</td>
+          <td>${escapeHtml(m.position)}</td>
+          <td>
+            <button onclick="editMember('${m.id}')">수정</button>
+            <button class="red" onclick="deleteMember('${m.id}')">삭제</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    // 폼 초기화
+    function resetForm() {
+      document.getElementById("memberForm").reset();
+      document.getElementById("memberId").value = "";
+      document.getElementById("formTitle").textContent = "교인 등록";
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("cancelBtn").style.display = "none";
+    }
+
+    // 등록 / 수정 저장
+    document.getElementById("memberForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const member = {
+        id: document.getElementById("memberId").value ||
+            Date.now().toString() + Math.random().toString(36).slice(2, 7),
+        name: document.getElementById("name").value.trim(),
+        gender: document.getElementById("gender").value,
+        birth: document.getElementById("birth").value,
+        phone: document.getElementById("phone").value.trim(),
+        position: document.getElementById("position").value,
+        regDate: document.getElementById("regDate").value,
+        address: document.getElementById("address").value.trim(),
+        memo: document.getElementById("memo").value.trim()
+      };
+
+      const members = loadMembers();
+      const index = members.findIndex(m => m.id === member.id);
+
+      if (index >= 0) {
+        members[index] = member;   // 수정
+      } else {
+        members.push(member);      // 신규 등록
+      }
+
+      saveMembers(members);
+      resetForm();
+      renderList();
+    });
+
+    // 수정 버튼: 폼에 기존 정보 채우기
+    function editMember(id) {
+      const m = loadMembers().find(m => m.id === id);
+      if (!m) return;
+
+      document.getElementById("memberId").value = m.id;
+      document.getElementById("name").value = m.name;
+      document.getElementById("gender").value = m.gender;
+      document.getElementById("birth").value = m.birth;
+      document.getElementById("phone").value = m.phone;
+      document.getElementById("position").value = m.position;
+      document.getElementById("regDate").value = m.regDate;
+      document.getElementById("address").value = m.address;
+      document.getElementById("memo").value = m.memo;
+
+      document.getElementById("formTitle").textContent = "교인 정보 수정";
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("cancelBtn").style.display = "inline-block";
+      window.scrollTo(0, 0);
+    }
+
+    // 삭제 버튼
+    function deleteMember(id) {
+      const m = loadMembers().find(m => m.id === id);
+      if (!m || !confirm(`'${m.name}' 님을 삭제하시겠습니까?`)) return;
+
+      saveMembers(loadMembers().filter(m => m.id !== id));
+      renderList();
+    }
+
+    // 백업 내보내기: 현재 명부를 JSON 파일로 다운로드
+    document.getElementById("exportBtn").addEventListener("click", function () {
+      const members = loadMembers();
+      const json = JSON.stringify(members, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `교인명부_백업_${today}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // 백업 불러오기: 파일 선택 창 열기
+    document.getElementById("importBtn").addEventListener("click", function () {
+      document.getElementById("importFile").click();
+    });
+
+    // 백업 불러오기: 선택한 파일 읽어서 명부 교체
+    document.getElementById("importFile").addEventListener("change", function () {
+      const file = this.files[0];
+      this.value = "";   // 같은 파일을 다시 선택해도 동작하도록
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function () {
+        let members;
+        try {
+          members = JSON.parse(reader.result);
+        } catch (e) {
+          alert("올바른 백업 파일이 아닙니다.");
+          return;
+        }
+
+        if (!Array.isArray(members) || !members.every(m => m && m.id && m.name)) {
+          alert("올바른 백업 파일이 아닙니다.");
+          return;
+        }
+
+        if (!confirm(`백업 파일의 ${members.length}명으로 현재 명부를 바꿉니다.\n현재 명부는 사라집니다. 계속하시겠습니까?`)) return;
+
+        saveMembers(members);
+        resetForm();
+        renderList();
+        alert("백업을 불러왔습니다.");
+      };
+      reader.readAsText(file, "utf-8");
+    });
+
+    document.getElementById("cancelBtn").addEventListener("click", resetForm);
+    document.getElementById("search").addEventListener("input", renderList);
+
+    // 처음 열 때 목록 표시
+    renderList();
+  </script>
+</body>
+</html>
